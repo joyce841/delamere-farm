@@ -11,72 +11,70 @@ import { eq } from "drizzle-orm";
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req, res, next) => {
+// Request logger
+app.use((req, _res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   next();
 });
 
-console.log("🔄 Registering routes...");
+// Register all API routes first
 registerRoutes(app);
-console.log("✅ Routes registered");
 
-// Admin startup
-async function setupAdminOnStartup() {
+// Auto-assign admin role on startup
+async function setupAdmin() {
   try {
     const adminEmail = "joycechepkemoi976@gmail.com";
-    const result = await db.update(users)
+    const result = await db
+      .update(users)
       .set({ role: "admin" })
       .where(eq(users.email, adminEmail))
       .returning();
+
     if (result.length > 0) {
-      console.log(`✅ Admin user updated: ${adminEmail}`);
+      console.log(`✅ Admin role assigned to: ${adminEmail}`);
     } else {
-      console.log(`ℹ️ User ${adminEmail} not found – will be admin when they register`);
+      console.log(`ℹ️ Admin user not found yet — will be assigned admin on registration`);
     }
-  } catch (error) {
-    console.error("Error setting up admin:", error);
+  } catch (err) {
+    console.error("❌ Admin setup error:", err);
   }
 }
-setupAdminOnStartup();
+setupAdmin();
 
-// ---------- Static file serving ----------
-const staticPath = path.join(process.cwd(), "dist/public");
-console.log(`📂 Attempting to serve static files from: ${staticPath}`);
+// Serve static frontend files
+const staticPath = path.join(process.cwd(), "dist", "public");
+console.log(`📂 Static path: ${staticPath}`);
 
 if (fs.existsSync(staticPath)) {
-  console.log("✅ Static folder found, serving...");
+  console.log("✅ Static folder found — serving frontend");
   app.use(express.static(staticPath));
 
-  // ✅ CORRECT: Use plain "*" for Express 5 catch‑all
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) {
+  // SPA fallback — using middleware NOT app.get("*") which crashes Express 5
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
       return next();
     }
     const indexPath = path.join(staticPath, "index.html");
     if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      console.error("❌ index.html not found in static folder!");
-      res.status(500).send("Frontend build missing.");
+      return res.sendFile(indexPath);
     }
+    return res.status(500).send("Frontend build missing. Run npm run build first.");
   });
 } else {
-  console.warn("⚠️ Static folder not found – API only mode. Frontend will not load.");
-  app.get("/", (req, res) => {
-    res.json({ message: "Delamere Farm Backend Running 🚜" });
+  console.warn("⚠️ No static folder found — running in API-only mode");
+  app.get("/", (_req, res) => {
+    res.json({ status: "Delamere Farm API running 🚜" });
   });
 }
-
-// Test route
-app.get("/api/test", (req, res) => {
-  res.json({ message: "API is working!" });
-});
 
 // 404 handler
 app.use((req, res) => {
@@ -84,14 +82,13 @@ app.use((req, res) => {
   res.status(404).json({ error: `Cannot ${req.method} ${req.url}` });
 });
 
-// Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('❌ Server error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+// Global error handler
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("❌ Server error:", err);
+  res.status(500).json({ error: "Internal server error" });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 Test: http://localhost:${PORT}/api/test`);
 });
