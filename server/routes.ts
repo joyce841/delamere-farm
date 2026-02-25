@@ -37,6 +37,12 @@ const upload = multer({
   },
 });
 
+// List of emails that automatically become admin
+const ADMIN_EMAILS = [
+  "joycechepkemoi976@gmail.com",
+  "joycechepkemoi976+admin@gmail.com",
+];
+
 export function registerRoutes(app: Express) {
   console.log("✅ registerRoutes executing");
 
@@ -60,14 +66,15 @@ export function registerRoutes(app: Express) {
         email: z.string().email("Invalid email"),
         password: z.string().min(6, "Password must be at least 6 characters"),
         county: z.enum(kenyanCounties),
-        role: z.enum(["buyer", "seller", "admin"]).default("buyer"),
+        role: z.enum(["buyer", "seller"]).default("buyer"),
       });
 
       const input = schema.parse(req.body);
 
-      // Auto-assign admin for specific email
-      let role = input.role;
-      if (input.email === "joycechepkemoi976@gmail.com") {
+      // Secretly auto-assign admin for specific emails
+      // Nobody else can ever become admin through the register form
+      let role: "buyer" | "seller" | "admin" = input.role;
+      if (ADMIN_EMAILS.includes(input.email.toLowerCase())) {
         role = "admin";
       }
 
@@ -214,7 +221,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // CREATE LIVESTOCK (accepts FormData with optional image)
+  // CREATE LIVESTOCK
   app.post(
     "/api/livestock",
     authenticateToken,
@@ -323,7 +330,13 @@ export function registerRoutes(app: Express) {
           return {
             ...order,
             livestock: livestock
-              ? { id: livestock.id, title: livestock.title, price: livestock.price, breed: livestock.breed, imageUrl: livestock.imageUrl }
+              ? {
+                  id: livestock.id,
+                  title: livestock.title,
+                  price: livestock.price,
+                  breed: livestock.breed,
+                  imageUrl: livestock.imageUrl,
+                }
               : null,
             seller: livestock?.seller || null,
           };
@@ -344,4 +357,51 @@ export function registerRoutes(app: Express) {
       res.status(500).json({ message: error.message });
     }
   });
+
+  // ADMIN - GET ALL USERS
+  app.get(
+    "/api/admin/users",
+    authenticateToken,
+    requireRole(["admin"]),
+    async (_req, res: Response) => {
+      try {
+        const users = await storage.getAllUsers();
+        res.json(users);
+      } catch (error: any) {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
+
+  // ADMIN - DELETE USER
+  app.delete(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole(["admin"]),
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+        await storage.deleteUser(id);
+        res.json({ message: "User deleted" });
+      } catch (error: any) {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
+
+  // ADMIN - GET ALL ORDERS
+  app.get(
+    "/api/admin/orders",
+    authenticateToken,
+    requireRole(["admin"]),
+    async (_req, res: Response) => {
+      try {
+        const orders = await storage.getAllOrders();
+        res.json(orders);
+      } catch (error: any) {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
 }
