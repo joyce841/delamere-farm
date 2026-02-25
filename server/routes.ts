@@ -7,6 +7,7 @@ import { kenyanCounties } from "../shared/schema.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import bcrypt from "bcryptjs";
 
 console.log("🔥 routes.ts loaded");
 
@@ -41,30 +42,14 @@ export function registerRoutes(app: Express) {
 
   // Static files
   app.use("/uploads", express.static("uploads"));
-  console.log("✅ Static route: /uploads");
 
   // TEST ROUTE
-  app.get("/api/test", (req, res) => {
-    console.log("✅ TEST ROUTE HIT");
-    res.json({ 
-      message: "API is working!",
-      time: new Date().toISOString(),
-      routes: {
-        register: "POST /api/auth/register",
-        login: "POST /api/auth/login",
-        profile: "PUT /api/auth/profile",
-        me: "GET /api/auth/me",
-        livestock: "GET /api/livestock",
-        createLivestock: "POST /api/livestock",
-        orders: "POST /api/orders",
-        myOrders: "GET /api/orders/my"
-      }
-    });
+  app.get("/api/test", (_req, res) => {
+    res.json({ message: "API is working!", time: new Date().toISOString() });
   });
-  console.log("✅ Route: GET /api/test");
 
   // =====================================
-  // REGISTER – with auto‑admin for specific email
+  // REGISTER
   // =====================================
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -80,7 +65,7 @@ export function registerRoutes(app: Express) {
 
       const input = schema.parse(req.body);
 
-      // 👇 Auto‑assign admin for the specific email
+      // Auto-assign admin for specific email
       let role = input.role;
       if (input.email === "joycechepkemoi976@gmail.com") {
         role = "admin";
@@ -91,8 +76,12 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
+      // Hash password before saving
+      const hashedPassword = await bcrypt.hash(input.password, 10);
+
       const newUser = await storage.createUser({
         ...input,
+        password: hashedPassword,
         role,
       });
 
@@ -115,39 +104,32 @@ export function registerRoutes(app: Express) {
       res.status(400).json({ message: error.message });
     }
   });
-  console.log("✅ Route: POST /api/auth/register (with auto‑admin)");
 
-  // LOGIN - WITH DEBUG LOGS
+  // =====================================
+  // LOGIN
+  // =====================================
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-      
-      console.log("🔍 Login attempt for email:", email);
-      
-      const user = await storage.getUserByEmail(email);
-      console.log("📦 User from DB:", user ? { 
-        id: user.id, 
-        email: user.email, 
-        storedPassword: user.password,
-        passwordLength: user.password?.length
-      } : "NOT FOUND");
 
+      console.log("🔍 Login attempt:", email);
+
+      const user = await storage.getUserByEmail(email);
       if (!user) {
         console.log("❌ User not found");
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      console.log("🔑 Input password:", password);
-      console.log("🔒 Stored password:", user.password);
-
-      if (user.password !== password) {
+      // Compare with bcrypt
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) {
         console.log("❌ Password mismatch");
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      console.log("✅ Password match, generating token");
+      console.log("✅ Login successful for:", email);
       const token = generateToken(user.id, user.role);
-      
+
       res.json({
         message: "Login successful",
         token,
@@ -165,15 +147,12 @@ export function registerRoutes(app: Express) {
       res.status(500).json({ message: error.message });
     }
   });
-  console.log("✅ Route: POST /api/auth/login");
 
   // GET CURRENT USER
   app.get("/api/auth/me", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const user = await storage.getUser(req.user!.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      if (!user) return res.status(404).json({ message: "User not found" });
       res.json({
         id: user.id,
         name: user.name,
@@ -183,26 +162,19 @@ export function registerRoutes(app: Express) {
         whatsappNumber: user.whatsappNumber,
       });
     } catch (error: any) {
-      console.error("Me error:", error);
       res.status(500).json({ message: error.message });
     }
   });
-  console.log("✅ Route: GET /api/auth/me");
 
   // UPDATE PROFILE
   app.put("/api/auth/profile", authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const { whatsappNumber } = req.body;
-      
       if (!whatsappNumber) {
         return res.status(400).json({ message: "whatsappNumber is required" });
       }
-
       const updatedUser = await storage.updateUser(req.user!.id, { whatsappNumber });
-      if (!updatedUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
+      if (!updatedUser) return res.status(404).json({ message: "User not found" });
       res.json({
         message: "Profile updated",
         user: {
@@ -215,44 +187,34 @@ export function registerRoutes(app: Express) {
         },
       });
     } catch (error: any) {
-      console.error("Profile update error:", error);
       res.status(500).json({ message: error.message });
     }
   });
-  console.log("✅ Route: PUT /api/auth/profile");
 
   // GET ALL LIVESTOCK
-  app.get("/api/livestock", async (req, res) => {
+  app.get("/api/livestock", async (_req, res) => {
     try {
       const livestock = await storage.getAllLivestockWithSeller();
       res.json(livestock);
     } catch (error: any) {
-      console.error("Get livestock error:", error);
       res.status(500).json({ message: error.message });
     }
   });
-  console.log("✅ Route: GET /api/livestock");
 
   // GET SINGLE LIVESTOCK
   app.get("/api/livestock/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid ID" });
-      }
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const livestock = await storage.getLivestockWithSeller(id);
-      if (!livestock) {
-        return res.status(404).json({ message: "Livestock not found" });
-      }
+      if (!livestock) return res.status(404).json({ message: "Livestock not found" });
       res.json(livestock);
     } catch (error: any) {
-      console.error("Get livestock error:", error);
       res.status(500).json({ message: error.message });
     }
   });
-  console.log("✅ Route: GET /api/livestock/:id");
 
-  // CREATE LIVESTOCK
+  // CREATE LIVESTOCK (accepts FormData with optional image)
   app.post(
     "/api/livestock",
     authenticateToken,
@@ -292,29 +254,36 @@ export function registerRoutes(app: Express) {
       }
     }
   );
-  console.log("✅ Route: POST /api/livestock");
 
-  // ORDERS - CREATE with WhatsApp redirect
+  // DELETE LIVESTOCK
+  app.delete(
+    "/api/livestock/:id",
+    authenticateToken,
+    requireRole(["seller", "admin"]),
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+        await storage.deleteLivestock(id);
+        res.json({ message: "Livestock deleted" });
+      } catch (error: any) {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
+
+  // CREATE ORDER
   app.post(
     "/api/orders",
     authenticateToken,
     requireRole(["buyer", "admin"]),
     async (req: AuthRequest, res: Response) => {
       try {
-        console.log("📝 ORDER CREATION ATTEMPT");
-        console.log("User:", req.user);
-        console.log("Body:", req.body);
-
-        const schema = z.object({
-          livestockId: z.number(),
-        });
-
+        const schema = z.object({ livestockId: z.number() });
         const input = schema.parse(req.body);
 
         const livestock = await storage.getLivestockWithSeller(input.livestockId);
-        if (!livestock) {
-          return res.status(404).json({ message: "Livestock not found" });
-        }
+        if (!livestock) return res.status(404).json({ message: "Livestock not found" });
 
         const newOrder = await storage.createOrder({
           livestockId: input.livestockId,
@@ -324,68 +293,55 @@ export function registerRoutes(app: Express) {
 
         const buyer = await storage.getUser(req.user!.id);
         const sellerPhone = livestock.seller.whatsappNumber || livestock.seller.phoneNumber;
-        
+
         const message = encodeURIComponent(
-          `Hello ${livestock.seller.name},\n\n` +
-          `I'm interested in: ${livestock.title} (KES ${livestock.price})\n\n` +
-          `My name: ${buyer?.name}\n` +
-          `My phone: ${buyer?.phoneNumber}\n\n` +
-          `Is this available?`
+          `Hello ${livestock.seller.name},\n\nI'm interested in: ${livestock.title} (KES ${livestock.price})\n\nMy name: ${buyer?.name}\nMy phone: ${buyer?.phoneNumber}\n\nIs this available?`
         );
 
-        const whatsappLink = sellerPhone 
-          ? `https://wa.me/${sellerPhone.replace(/\D/g, '')}?text=${message}`
+        const whatsappLink = sellerPhone
+          ? `https://wa.me/${sellerPhone.replace(/\D/g, "")}?text=${message}`
           : null;
-
-        console.log("✅ Order created successfully");
 
         res.status(201).json({
           message: "Order placed successfully",
           order: newOrder,
-          whatsapp: {
-            link: whatsappLink,
-          },
+          whatsapp: { link: whatsappLink },
         });
-
       } catch (error: any) {
-        console.error("Create order error:", error);
         res.status(500).json({ message: error.message });
       }
     }
   );
-  console.log("✅ Route: POST /api/orders");
 
   // GET MY ORDERS
-  app.get(
-    "/api/orders/my",
-    authenticateToken,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const orders = await storage.getOrdersByUser(req.user!.id);
-        
-        const enhancedOrders = await Promise.all(
-          orders.map(async (order) => {
-            const livestock = await storage.getLivestockWithSeller(order.livestockId);
-            return {
-              ...order,
-              livestock: livestock ? {
-                id: livestock.id,
-                title: livestock.title,
-                price: livestock.price,
-                breed: livestock.breed,
-                imageUrl: livestock.imageUrl,
-              } : null,
-              seller: livestock?.seller || null,
-            };
-          })
-        );
-
-        res.json(enhancedOrders);
-      } catch (error: any) {
-        console.error("Get my orders error:", error);
-        res.status(500).json({ message: error.message });
-      }
+  app.get("/api/orders/my", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const orders = await storage.getOrdersByUser(req.user!.id);
+      const enhancedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const livestock = await storage.getLivestockWithSeller(order.livestockId);
+          return {
+            ...order,
+            livestock: livestock
+              ? { id: livestock.id, title: livestock.title, price: livestock.price, breed: livestock.breed, imageUrl: livestock.imageUrl }
+              : null,
+            seller: livestock?.seller || null,
+          };
+        })
+      );
+      res.json(enhancedOrders);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
-  );
-  console.log("✅ Route: GET /api/orders/my");
+  });
+
+  // GET SELLER'S OWN LIVESTOCK
+  app.get("/api/my-livestock", authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const livestock = await storage.getLivestockBySeller(req.user!.id);
+      res.json(livestock);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
 }
