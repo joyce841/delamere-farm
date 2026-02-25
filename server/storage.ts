@@ -2,25 +2,7 @@ import { db } from "./db";
 import { users, livestock, orders, type InsertUser, type User, type InsertLivestock, type Livestock, type InsertOrder, type Order } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
-  getAllUsers(): Promise<User[]>;
-
-  createLivestock(livestockItem: InsertLivestock & { sellerId: number }): Promise<Livestock>;
-  getLivestock(id: number): Promise<Livestock | undefined>;
-  getAllLivestock(): Promise<Livestock[]>;
-  getLivestockWithSeller(id: number): Promise<any>;
-  getAllLivestockWithSeller(): Promise<any[]>;
-  deleteLivestock(id: number): Promise<void>;
-
-  createOrder(order: InsertOrder & { buyerId: number }): Promise<Order>;
-  getOrdersByUser(userId: number): Promise<Order[]>;
-}
-
-export class DatabaseStorage implements IStorage {
+export class DatabaseStorage {
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -36,7 +18,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined> {
+  async updateUser(id: number, data: Partial<any>): Promise<User | undefined> {
     const [user] = await db.update(users)
       .set(data)
       .where(eq(users.id, id))
@@ -46,6 +28,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async createLivestock(item: InsertLivestock & { sellerId: number }): Promise<Livestock> {
@@ -62,9 +48,14 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(livestock);
   }
 
+  async getLivestockBySeller(sellerId: number): Promise<Livestock[]> {
+    return await db.select().from(livestock).where(eq(livestock.sellerId, sellerId));
+  }
+
   async getLivestockWithSeller(id: number): Promise<any> {
     const [l] = await db.select({
       id: livestock.id,
+      sellerId: livestock.sellerId,
       title: livestock.title,
       description: livestock.description,
       price: livestock.price,
@@ -90,6 +81,7 @@ export class DatabaseStorage implements IStorage {
   async getAllLivestockWithSeller(): Promise<any[]> {
     return await db.select({
       id: livestock.id,
+      sellerId: livestock.sellerId,
       title: livestock.title,
       description: livestock.description,
       price: livestock.price,
@@ -121,6 +113,10 @@ export class DatabaseStorage implements IStorage {
 
   async getOrdersByUser(userId: number): Promise<Order[]> {
     return await db.select().from(orders).where(eq(orders.buyerId, userId));
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    return await db.select().from(orders);
   }
 }
 
