@@ -37,10 +37,11 @@ const upload = multer({
   },
 });
 
-// List of emails that automatically become admin
+// Only these emails become admin automatically
 const ADMIN_EMAILS = [
   "joycechepkemoi976@gmail.com",
   "joycechepkemoi976+admin@gmail.com",
+  "joycechepkemoi976+admin2@gmail.com",
 ];
 
 export function registerRoutes(app: Express) {
@@ -72,7 +73,6 @@ export function registerRoutes(app: Express) {
       const input = schema.parse(req.body);
 
       // Secretly auto-assign admin for specific emails
-      // Nobody else can ever become admin through the register form
       let role: "buyer" | "seller" | "admin" = input.role;
       if (ADMIN_EMAILS.includes(input.email.toLowerCase())) {
         role = "admin";
@@ -83,7 +83,7 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      // Hash password before saving
+      // Hash password
       const hashedPassword = await bcrypt.hash(input.password, 10);
 
       const newUser = await storage.createUser({
@@ -118,23 +118,19 @@ export function registerRoutes(app: Express) {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-
       console.log("🔍 Login attempt:", email);
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        console.log("❌ User not found");
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Compare with bcrypt
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
-        console.log("❌ Password mismatch");
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      console.log("✅ Login successful for:", email);
+      console.log("✅ Login successful:", email);
       const token = generateToken(user.id, user.role);
 
       res.json({
