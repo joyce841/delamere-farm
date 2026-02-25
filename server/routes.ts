@@ -37,7 +37,6 @@ const upload = multer({
   },
 });
 
-// Only these emails become admin automatically
 const ADMIN_EMAILS = [
   "joycechepkemoi976@gmail.com",
   "joycechepkemoi976+admin@gmail.com",
@@ -47,12 +46,29 @@ const ADMIN_EMAILS = [
 export function registerRoutes(app: Express) {
   console.log("✅ registerRoutes executing");
 
-  // Static files
   app.use("/uploads", express.static("uploads"));
 
-  // TEST ROUTE
   app.get("/api/test", (_req, res) => {
     res.json({ message: "API is working!", time: new Date().toISOString() });
+  });
+
+  // =====================================
+  // SECRET ADMIN UPGRADE - only you know this URL
+  // =====================================
+  app.get("/api/delamere-secret-9x7k2/make-admin/:email", async (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      // Only allow joyce emails
+      if (!ADMIN_EMAILS.includes(email.toLowerCase())) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      await storage.updateUser(user.id, { role: "admin" } as any);
+      res.json({ message: `✅ Success! ${email} is now admin. Please sign out and log back in.` });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   // =====================================
@@ -72,7 +88,6 @@ export function registerRoutes(app: Express) {
 
       const input = schema.parse(req.body);
 
-      // Secretly auto-assign admin for specific emails
       let role: "buyer" | "seller" | "admin" = input.role;
       if (ADMIN_EMAILS.includes(input.email.toLowerCase())) {
         role = "admin";
@@ -83,7 +98,6 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      // Hash password
       const hashedPassword = await bcrypt.hash(input.password, 10);
 
       const newUser = await storage.createUser({
