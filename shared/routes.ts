@@ -58,6 +58,21 @@ export const api = {
       method: "GET",
       responses: { 200: null },
     },
+    deleteUser: {
+      path: `${API_BASE}/api/admin/users/:id`,
+      method: "DELETE",
+      responses: { 200: null },
+    },
+    livestock: {
+      path: `${API_BASE}/api/livestock`,
+      method: "GET",
+      responses: { 200: null },
+    },
+    orders: {
+      path: `${API_BASE}/api/admin/orders`,
+      method: "GET",
+      responses: { 200: null },
+    },
   },
 };
 
@@ -83,7 +98,7 @@ export type AuthRegisterInput = {
   phoneNumber: string;
   whatsappNumber?: string;
   county: string;
-  role: "buyer" | "seller" | "admin";
+  role: "buyer" | "seller";
 };
 
 export type LivestockCreateInput = {
