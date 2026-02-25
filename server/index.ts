@@ -53,7 +53,8 @@ if (fs.existsSync(staticPath)) {
   console.log("✅ Static folder found, serving...");
   app.use(express.static(staticPath));
 
-  app.get("*", (req, res, next) => {
+  // ✅ FIXED: Use a named wildcard parameter for Express 5 compatibility
+  app.get("/:splat*", (req, res, next) => {
     if (req.path.startsWith("/api")) {
       return next();
     }
