@@ -1,153 +1,101 @@
-import { z } from 'zod';
-import { insertUserSchema, insertLivestockSchema, insertOrderSchema, users, livestock, orders } from './schema';
-
-export const errorSchemas = {
-  validation: z.object({
-    message: z.string(),
-    field: z.string().optional(),
-  }),
-  notFound: z.object({
-    message: z.string(),
-  }),
-  unauthorized: z.object({
-    message: z.string(),
-  }),
-  forbidden: z.object({
-    message: z.string(),
-  }),
-  internal: z.object({
-    message: z.string(),
-  }),
-};
+const API_BASE = "";
 
 export const api = {
   auth: {
-    register: {
-      method: 'POST' as const,
-      path: '/api/auth/register' as const,
-      input: insertUserSchema.omit({ role: true }).extend({
-        role: z.enum(["buyer", "seller"]).optional().default("buyer")
-      }),
-      responses: {
-        201: z.object({ token: z.string(), user: z.custom<typeof users.$inferSelect>() }),
-        400: errorSchemas.validation,
-      },
-    },
     login: {
-      method: 'POST' as const,
-      path: '/api/auth/login' as const,
-      input: z.object({
-        email: z.string().email(),
-        password: z.string(),
-      }),
-      responses: {
-        200: z.object({ token: z.string(), user: z.custom<typeof users.$inferSelect>() }),
-        400: errorSchemas.validation,
-        401: errorSchemas.unauthorized,
-      },
+      path: `${API_BASE}/api/auth/login`,
+      method: "POST",
+      responses: { 200: null },
+    },
+    register: {
+      path: `${API_BASE}/api/auth/register`,
+      method: "POST",
+      responses: { 201: null },
     },
     me: {
-      method: 'GET' as const,
-      path: '/api/auth/me' as const,
-      responses: {
-        200: z.custom<typeof users.$inferSelect>(),
-        401: errorSchemas.unauthorized,
-      },
+      path: `${API_BASE}/api/auth/me`,
+      method: "GET",
+      responses: { 200: null },
     },
   },
   livestock: {
     list: {
-      method: 'GET' as const,
-      path: '/api/livestock' as const,
-      responses: {
-        200: z.array(z.custom<typeof livestock.$inferSelect>()),
-      },
+      path: `${API_BASE}/api/livestock`,
+      method: "GET",
+      responses: { 200: null },
     },
     get: {
-      method: 'GET' as const,
-      path: '/api/livestock/:id' as const,
-      responses: {
-        200: z.custom<typeof livestock.$inferSelect>(),
-        404: errorSchemas.notFound,
-      },
+      path: `${API_BASE}/api/livestock/:id`,
+      method: "GET",
+      responses: { 200: null },
     },
     create: {
-      method: 'POST' as const,
-      path: '/api/livestock' as const,
-      input: insertLivestockSchema.omit({ sellerId: true }),
-      responses: {
-        201: z.custom<typeof livestock.$inferSelect>(),
-        400: errorSchemas.validation,
-        401: errorSchemas.unauthorized,
-        403: errorSchemas.forbidden,
-      },
+      path: `${API_BASE}/api/livestock`,
+      method: "POST",
+      responses: { 201: null },
     },
     delete: {
-      method: 'DELETE' as const,
-      path: '/api/livestock/:id' as const,
-      responses: {
-        204: z.void(),
-        401: errorSchemas.unauthorized,
-        403: errorSchemas.forbidden,
-        404: errorSchemas.notFound,
-      },
+      path: `${API_BASE}/api/livestock/:id`,
+      method: "DELETE",
+      responses: { 200: null },
     },
   },
   orders: {
     create: {
-      method: 'POST' as const,
-      path: '/api/orders' as const,
-      input: insertOrderSchema.omit({ buyerId: true, paymentStatus: true, transactionId: true }),
-      responses: {
-        201: z.custom<typeof orders.$inferSelect>(),
-        400: errorSchemas.validation,
-        401: errorSchemas.unauthorized,
-      },
+      path: `${API_BASE}/api/orders`,
+      method: "POST",
+      responses: { 201: null },
     },
     myOrders: {
-      method: 'GET' as const,
-      path: '/api/orders/my' as const,
-      responses: {
-        200: z.array(z.custom<typeof orders.$inferSelect>()),
-        401: errorSchemas.unauthorized,
-      },
+      path: `${API_BASE}/api/orders/my`,
+      method: "GET",
+      responses: { 200: null },
     },
   },
   admin: {
     users: {
-      method: 'GET' as const,
-      path: '/api/admin/users' as const,
-      responses: {
-        200: z.array(z.custom<typeof users.$inferSelect>()),
-        401: errorSchemas.unauthorized,
-        403: errorSchemas.forbidden,
-      },
+      path: `${API_BASE}/api/admin/users`,
+      method: "GET",
+      responses: { 200: null },
     },
-    livestock: {
-      method: 'GET' as const,
-      path: '/api/admin/livestock' as const,
-      responses: {
-        200: z.array(z.custom<typeof livestock.$inferSelect>()),
-        401: errorSchemas.unauthorized,
-        403: errorSchemas.forbidden,
-      },
-    }
   },
 };
 
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
+export function buildUrl(path: string, params?: Record<string, string | number>) {
   let url = path;
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      if (url.includes(`:${key}`)) {
-        url = url.replace(`:${key}`, String(value));
-      }
+      url = url.replace(`:${key}`, String(value));
     });
   }
   return url;
 }
 
-export type AuthRegisterInput = z.infer<typeof api.auth.register.input>;
-export type AuthLoginInput = z.infer<typeof api.auth.login.input>;
-export type LivestockCreateInput = z.infer<typeof api.livestock.create.input>;
-export type OrderCreateInput = z.infer<typeof api.orders.create.input>;
+export type AuthLoginInput = {
+  email: string;
+  password: string;
+};
+
+export type AuthRegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phoneNumber: string;
+  whatsappNumber?: string;
+  county: string;
+  role: "buyer" | "seller" | "admin";
+};
+
+export type LivestockCreateInput = {
+  title: string;
+  description: string;
+  price: string;
+  breed: string;
+  healthStatus: string;
+  county: string;
+  image?: File;
+};
+
+export type OrderCreateInput = {
+  livestockId: number;
+};

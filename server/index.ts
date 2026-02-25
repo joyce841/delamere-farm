@@ -1,103 +1,73 @@
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
-import { createServer } from "http";
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { registerRoutes } from "./routes.js";
+
+// 👇 NEW: Import for admin auto‑setup
+import { db } from "./db.js";
+import { users } from "../shared/schema.js";
+import { eq } from "drizzle-orm";
+
+dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
 
-declare module "http" {
-  interface IncomingMessage {
-    rawBody: unknown;
-  }
-}
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-
-app.use(express.urlencoded({ extended: false }));
-
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
-
+// Log all requests
 app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
-    }
-  });
-
+  console.log(`📨 ${req.method} ${req.url}`);
   next();
 });
 
-(async () => {
-  await registerRoutes(httpServer, app);
+// Register routes
+console.log("🔄 Registering routes...");
+registerRoutes(app);
+console.log("✅ Routes registered");
 
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+// 👇 NEW: One‑time admin setup (runs on server start)
+async function setupAdminOnStartup() {
+  try {
+    const adminEmail = "joycechepkemoi976@gmail.com";
+    const result = await db.update(users)
+      .set({ role: "admin" })
+      .where(eq(users.email, adminEmail))
+      .returning();
 
-    console.error("Internal Server Error:", err);
-
-    if (res.headersSent) {
-      return next(err);
+    if (result.length > 0) {
+      console.log(`✅ Admin user updated: ${adminEmail}`);
+    } else {
+      console.log(`ℹ️ User ${adminEmail} not found – will be admin when they register`);
     }
-
-    return res.status(status).json({ message });
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
+  } catch (error) {
+    console.error("Error setting up admin:", error);
   }
+}
+setupAdminOnStartup();
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
-})();
+// Test route
+app.get("/", (req, res) => {
+  res.json({ message: "Delamere Farm Backend Running 🚜" });
+});
+
+// 404 handler
+app.use((req, res) => {
+  console.log(`❌ 404: ${req.method} ${req.url}`);
+  res.status(404).json({ error: `Cannot ${req.method} ${req.url}` });
+});
+
+// Error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📝 Test: http://localhost:${PORT}/api/test`);
+});

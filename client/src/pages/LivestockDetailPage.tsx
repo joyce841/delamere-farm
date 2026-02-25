@@ -60,6 +60,12 @@ export function LivestockDetailPage() {
 
   const imageSrc = `https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=1200&h=800&fit=crop&q=80&sig=${livestock.id}`;
 
+  const whatsappLink = `https://wa.me/${livestock.phoneNumber}?text=${encodeURIComponent(
+    `Hello, I am interested in your ${livestock.title} listed at ${formatCurrency(
+      livestock.price.toString()
+    )}.`
+  )}`;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
@@ -73,7 +79,6 @@ export function LivestockDetailPage() {
 
           <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden flex flex-col lg:flex-row">
             
-            {/* Image Section */}
             <div className="w-full lg:w-1/2 h-[400px] lg:h-auto relative bg-muted">
               <img 
                 src={imageSrc} 
@@ -82,7 +87,6 @@ export function LivestockDetailPage() {
               />
             </div>
 
-            {/* Content Section */}
             <div className="w-full lg:w-1/2 p-8 lg:p-12 flex flex-col">
               <div className="flex justify-between items-start gap-4 mb-4">
                 <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">
@@ -137,6 +141,16 @@ export function LivestockDetailPage() {
                     {createOrder.isPending ? "Processing..." : 
                       (user && user.id === livestock.sellerId ? "This is your listing" : "Place Order Now")}
                   </button>
+
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full mt-4 py-4 rounded-xl font-semibold text-lg bg-green-600 text-white text-center hover:bg-green-700 transition-all"
+                  >
+                    Chat Seller on WhatsApp
+                  </a>
+
                   {!user && (
                     <p className="text-center text-sm text-muted-foreground mt-3">
                       You will be asked to sign in first.
