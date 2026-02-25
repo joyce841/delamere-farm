@@ -4,8 +4,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes.js";
-
-// 👇 Admin startup (checks for existing user)
 import { db } from "./db.js";
 import { users } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
@@ -15,23 +13,20 @@ dotenv.config();
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log all requests
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   next();
 });
 
-// API routes
 console.log("🔄 Registering routes...");
 registerRoutes(app);
 console.log("✅ Routes registered");
 
-// 👇 One‑time admin setup (runs on server start)
+// Admin startup
 async function setupAdminOnStartup() {
   try {
     const adminEmail = "joycechepkemoi976@gmail.com";
@@ -39,7 +34,6 @@ async function setupAdminOnStartup() {
       .set({ role: "admin" })
       .where(eq(users.email, adminEmail))
       .returning();
-
     if (result.length > 0) {
       console.log(`✅ Admin user updated: ${adminEmail}`);
     } else {
@@ -53,8 +47,8 @@ setupAdminOnStartup();
 
 // Serve static files in production
 if (process.env.NODE_ENV === "production") {
-  // Serve static files from the dist/public directory
   const staticPath = path.join(__dirname, "../dist/public");
+  console.log(`📂 Serving static files from: ${staticPath}`);
   app.use(express.static(staticPath));
 
   // For any request that doesn't match an API route, serve index.html
@@ -62,11 +56,17 @@ if (process.env.NODE_ENV === "production") {
     if (req.path.startsWith("/api")) {
       return next();
     }
+    console.log(`📄 Serving index.html for ${req.path}`);
     res.sendFile(path.join(staticPath, "index.html"));
+  });
+} else {
+  // In development, serve the JSON message for root
+  app.get("/", (req, res) => {
+    res.json({ message: "Delamere Farm Backend Running 🚜" });
   });
 }
 
-// Test route
+// Test route (always available)
 app.get("/api/test", (req, res) => {
   res.json({ message: "API is working!" });
 });
@@ -84,7 +84,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Test: http://localhost:${PORT}/api/test`);
