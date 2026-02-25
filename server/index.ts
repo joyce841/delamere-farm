@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes.js";
 import { db } from "./db.js";
@@ -11,7 +12,6 @@ import { eq } from "drizzle-orm";
 dotenv.config();
 
 const app = express();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(cors());
 app.use(express.json());
@@ -45,28 +45,34 @@ async function setupAdminOnStartup() {
 }
 setupAdminOnStartup();
 
-// Serve static files in production
-if (process.env.NODE_ENV === "production") {
-  const staticPath = path.join(__dirname, "../dist/public");
-  console.log(`📂 Serving static files from: ${staticPath}`);
+// ---------- Static file serving ----------
+const staticPath = path.join(process.cwd(), "dist/public");
+console.log(`📂 Attempting to serve static files from: ${staticPath}`);
+
+if (fs.existsSync(staticPath)) {
+  console.log("✅ Static folder found, serving...");
   app.use(express.static(staticPath));
 
-  // For any request that doesn't match an API route, serve index.html
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) {
       return next();
     }
-    console.log(`📄 Serving index.html for ${req.path}`);
-    res.sendFile(path.join(staticPath, "index.html"));
+    const indexPath = path.join(staticPath, "index.html");
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      console.error("❌ index.html not found in static folder!");
+      res.status(500).send("Frontend build missing.");
+    }
   });
 } else {
-  // In development, serve the JSON message for root
+  console.warn("⚠️ Static folder not found – API only mode. Frontend will not load.");
   app.get("/", (req, res) => {
     res.json({ message: "Delamere Farm Backend Running 🚜" });
   });
 }
 
-// Test route (always available)
+// Test route
 app.get("/api/test", (req, res) => {
   res.json({ message: "API is working!" });
 });
