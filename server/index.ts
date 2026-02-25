@@ -42,7 +42,7 @@ async function setupAdmin() {
     if (result.length > 0) {
       console.log(`✅ Admin role assigned to: ${adminEmail}`);
     } else {
-      console.log(`ℹ️ Admin user not found yet — will be assigned admin on registration`);
+      console.log(`ℹ️ Admin user not found yet — will be assigned on registration`);
     }
   } catch (err) {
     console.error("❌ Admin setup error:", err);
@@ -58,7 +58,7 @@ if (fs.existsSync(staticPath)) {
   console.log("✅ Static folder found — serving frontend");
   app.use(express.static(staticPath));
 
-  // SPA fallback — using middleware NOT app.get("*") which crashes Express 5
+  // SPA fallback using middleware — NOT app.get("*") which crashes Express 5
   app.use((req, res, next) => {
     if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
       return next();
@@ -67,10 +67,10 @@ if (fs.existsSync(staticPath)) {
     if (fs.existsSync(indexPath)) {
       return res.sendFile(indexPath);
     }
-    return res.status(500).send("Frontend build missing. Run npm run build first.");
+    return res.status(500).send("Frontend build missing.");
   });
 } else {
-  console.warn("⚠️ No static folder found — running in API-only mode");
+  console.warn("⚠️ No static folder — API-only mode");
   app.get("/", (_req, res) => {
     res.json({ status: "Delamere Farm API running 🚜" });
   });
