@@ -2,10 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type AuthLoginInput, type AuthRegisterInput } from "@shared/routes";
 import { User } from "@shared/schema";
 import { apiFetch, handleApiResponse } from "../lib/api";
-import { useLocation } from "wouter";
 
 export function useAuth() {
-  const [_, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   const { data: user, isLoading, error } = useQuery<User | null>({
@@ -13,7 +11,6 @@ export function useAuth() {
     queryFn: async () => {
       const token = localStorage.getItem("token");
       if (!token) return null;
-      
       const res = await apiFetch(api.auth.me.path);
       if (res.status === 401) {
         localStorage.removeItem("token");
@@ -35,7 +32,14 @@ export function useAuth() {
     onSuccess: (data) => {
       localStorage.setItem("token", data.token);
       queryClient.setQueryData(["/api/auth/me"], data.user);
-      setLocation("/marketplace");
+      // Force full page reload so React Query cache is cleared with correct role
+      if (data.user.role === "admin") {
+        window.location.href = "/admin/dashboard";
+      } else if (data.user.role === "seller") {
+        window.location.href = "/seller/dashboard";
+      } else {
+        window.location.href = "/buyer/dashboard";
+      }
     },
   });
 
@@ -50,14 +54,21 @@ export function useAuth() {
     onSuccess: (data) => {
       localStorage.setItem("token", data.token);
       queryClient.setQueryData(["/api/auth/me"], data.user);
-      setLocation("/marketplace");
+      // Force full page reload so React Query cache is cleared with correct role
+      if (data.user.role === "admin") {
+        window.location.href = "/admin/dashboard";
+      } else if (data.user.role === "seller") {
+        window.location.href = "/seller/dashboard";
+      } else {
+        window.location.href = "/buyer/dashboard";
+      }
     },
   });
 
   const logout = () => {
     localStorage.removeItem("token");
-    queryClient.setQueryData(["/api/auth/me"], null);
-    setLocation("/");
+    queryClient.clear();
+    window.location.href = "/";
   };
 
   return {
