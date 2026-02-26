@@ -4,6 +4,8 @@ import { storage } from "./storage.js";
 import { generateToken } from "./utils/jwt.js";
 import { authenticateToken, requireRole, AuthRequest } from "./middleware/auth.js";
 import { kenyanCounties } from "../shared/schema.js";
+import { db } from "./db.js";
+import { sql } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -53,19 +55,22 @@ export function registerRoutes(app: Express) {
   });
 
   // =====================================
-  // SECRET ADMIN UPGRADE - only you know this URL
+  // SECRET ADMIN UPGRADE using raw SQL
   // =====================================
   app.get("/api/delamere-secret-9x7k2/make-admin/:email", async (req, res) => {
     try {
       const email = decodeURIComponent(req.params.email);
-      // Only allow joyce emails
       if (!ADMIN_EMAILS.includes(email.toLowerCase())) {
         return res.status(403).json({ message: "Not allowed" });
       }
+      // Raw SQL to bypass any ORM type restrictions
+      await db.execute(sql`UPDATE users SET role = 'admin' WHERE email = ${email}`);
       const user = await storage.getUserByEmail(email);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      await storage.updateUser(user.id, { role: "admin" } as any);
-      res.json({ message: `✅ Success! ${email} is now admin. Please sign out and log back in.` });
+      res.json({ 
+        message: `✅ Done!`,
+        email: user?.email,
+        role: user?.role 
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -144,7 +149,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      console.log("✅ Login successful:", email);
+      console.log("✅ Login successful:", email, "role:", user.role);
       const token = generateToken(user.id, user.role);
 
       res.json({
